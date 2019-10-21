@@ -105,7 +105,7 @@ TornSC.sf$PopOver65 = TornSC.sf$MlOvr65 + TornSC.sf$FmlOv65
 
 Create a new data frame with columns containing logged and scaled variables.
 ```{r}
-df <- (TornSC.sf) %>%
+df <- data.frame(TornSC.sf) %>%
  mutate(lpopD = log(popD),
         lED = log(ED),
         lcas = log(cas),
@@ -143,7 +143,10 @@ Dallas.sfdf <- Dallas.sfdf %>%
 
 This is the model.
 ```{r}
-df <- df[df$TotalPp > 0,]
+df = df %>%
+  dplyr::select(cas, lcas, syr, lpopD, lED, smh, mo, Hour)
+
+df <- df[!is.infinite(rowSums(df)),]
 
 #add dallas data
 df2 <- Dallas.sfdf %>%
@@ -155,7 +158,7 @@ df2 <- Dallas.sfdf %>%
 
 library(lme4)
 
-formula1 <- lcas ~ syr + lpopD + lED + lpopD:lED + lmh + (1|mo) + (1|Hour)
+formula1 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + (1|mo) + (1|Hour)
 m1 <- lmer(formula1, data = df)
 
 summary(m1)
