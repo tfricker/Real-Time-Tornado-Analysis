@@ -87,13 +87,42 @@ The Dallas, TX tornado impacted an estimated 97,250 people. It also impacted an 
 
 ### Casualty model
 
+To fit the model, first read in indiviudal tornado level estimates. Then edit the information to account for population density, etc.
+```{r}
+#unzip("SocialCorrelates.zip")
+TornSC.sf <- st_read(dsn = "SocialCorrelates", 
+                    layer = "SocialCorrelates", 
+                    stringsAsFactors = FALSE) %>%
+  mutate(date = as.Date(date),
+         DateTim = as.POSIXct(paste(yr, mo, dy, time), format = "%Y%m%d%H:%M:%S"))
+
+TornSC.sf$popD = TornSC.sf$TotalPp/TornSC.sf$AreaPth * 10^6
+TornSC.sf$PopUnder18 = TornSC.sf$MlUnd18 + TornSC.sf$FmlUn18
+TornSC.sf$Pop18to44 = TornSC.sf$Ml18t44 + TornSC.sf$Fml1844
+TornSC.sf$Pop45to64 = TornSC.sf$Ml45t64 + TornSC.sf$Fml4564
+TornSC.sf$PopOver65 = TornSC.sf$MlOvr65 + TornSC.sf$FmlOv65
+```
+
+Create a new data frame with columns containing logged and scaled variables.
+```{r}
+df <- as.data.frame(TornSC.sf) %>%
+ mutate(lpopD = log(popD),
+        lED = log(ED),
+        lcas = log(cas),
+        smi = scale(MdnIncm),
+        smh = scale(MoblHms),
+        syr = scale(Year),
+        pW = White/TotalPp,
+        pB = Black/TotalPp)
+```
+
 Find the actual path area and popD
 ```{r}
 Dallas.sfdf$PathArea <- st_area(Dallas.sfdf)
 Dallas.sfdf$popD <- (out2017.sf$B01001_001E/Dallas.sfdf$PathArea) * 10^6
-Dallas.sfdf$mag <- 2
-Dallas.sfdf$smh = 2.4266140
-Beauregard.sfdf$syr = 2.31
+Dallas.sfdf$mag <- 3
+Dallas.sfdf$smh = 2.422507
+Dallas.sfdf$syr = 2.05
 
 perc <- c(1, 0, 0, 0, 0, 0, 
          .772, .228, 0, 0, 0, 0,
@@ -104,23 +133,26 @@ perc <- c(1, 0, 0, 0, 0, 0,
 percM <- matrix(perc, ncol = 6, byrow = TRUE)
 threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
 midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
-ef <- Beauregard.sfdf$mag + 1
+ef <- Dallas.sfdf$mag + 1
 EW3 <- numeric()
 for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
-Beauregard.sfdf <- Beauregard.sfdf %>%
+Dallas.sfdf <- Dallas.sfdf %>%
  mutate(ED = EW3 * PathArea)
 ```
-The path area of the Beauregard-Smiths Station, AL tornado was 40774487.
 
 ```{r}
-# Create Dallas tornado data frame
+df <- df[df$TotalPp > 0,]
 
-df <- data.frame(pop = )
-
+#add dallas data
+df2 <- Dallas.sfdf %>%
+  mutate(lpopD = log(popD),
+         lED = log(ED),
+         mo = 10,
+         Hour = 9)
 
 library(lme4)
 
-formula4 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + smi + (1|mo) + (1|hr)
+formula4 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + (1|mo) + (1|Hour)
 m4 <- lmer(formula4, data = df)
 
 summary(m4)
