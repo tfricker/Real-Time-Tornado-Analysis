@@ -1,4 +1,128 @@
 ---
 title: "Real Time Analysis"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
+Set working directory and load packages.
+```{r}
+#setwd("~/Dropbox/Tyler")
+suppressPackageStartupMessages(library("ggplot2"))
+suppressPackageStartupMessages(library("ggmap"))
+suppressPackageStartupMessages(library("ggthemes"))
+suppressPackageStartupMessages(library("dplyr"))
+suppressPackageStartupMessages(library("tidyr"))
+suppressPackageStartupMessages(library("rgdal"))
+suppressPackageStartupMessages(library("rgeos"))
+suppressPackageStartupMessages(library("scales"))
+suppressPackageStartupMessages(library("RColorBrewer"))
+suppressPackageStartupMessages(library("maps"))
+suppressPackageStartupMessages(library("maptools"))
+suppressPackageStartupMessages(library("wesanderson"))
+suppressPackageStartupMessages(library("sf"))
+suppressPackageStartupMessages(library("classInt"))
+suppressPackageStartupMessages(library("leaflet"))
+suppressPackageStartupMessages(library("Hmisc"))
+suppressPackageStartupMessages(library("devtools"))
+suppressPackageStartupMessages(library("tidycensus"))
+suppressPackageStartupMessages(library("purrr"))
+suppressPackageStartupMessages(library("tidyverse"))
+suppressPackageStartupMessages(library("MASS"))
+suppressPackageStartupMessages(library("tmap"))
+suppressPackageStartupMessages(library("tmaptools"))
+suppressPackageStartupMessages(library("areal"))
+suppressPackageStartupMessages(library("ipumsr"))
+```
+
+### Dallas, Texas Tornado (10-20-2019)
+
+```{r}
+Dallas = readOGR("Dallas.kml") 
+
+Dallas.sfdf = sf::st_as_sf(Dallas) 
+Dallas.sfdf = Dallas.sfdf %>%
+  mutate(Name = "Dallas, TX") %>%
+  Dallas.sfdf[-c(2)]
+
+tmap_mode("view")
+tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_tiles("CartoDB.PositronOnlyLabels") +
+tm_shape(Dallas.sfdf) +
+  tm_polygons(col = "grey", alpha = 0.01, border.col = "red") +
+#  tm_shape(AL2010.sf) + 
+#  tm_borders(col = "grey80", alpha = 0.3) +
+  tm_scale_bar() +
+  tm_format_Europe(legend.position = c("left", "bottom"),
+                   attr.position = c("left", "bottom"),
+                   legend.frame = FALSE) +
+  tm_layout(panel.label.bg.color = "white", frame = FALSE)
+```
+
+Get Texas 2018 tract data. Only grab total population, total housing units, and mobile home units. Then overlay and extract information about the Dayton, OH tornado.
+```{r}
+TX2017.sf <- get_acs(state = "TX",
+          geography = "tract", 
+          variables = c("B01001_001", "B25024_001", "B25024_010"),
+          year = 2017,
+          output = "wide",
+          geometry = TRUE)
+
+TX2017.sf <- st_transform(TX2017.sf, 
+                     crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
+
+Dallas.sfdf <- st_transform(Dallas.sfdf, crs = st_crs(TX2017.sf))
+Dallas.sfdf$ID <-  1:nrow(Dallas.sfdf)
+TX2017.sf$ID2 <- 1:nrow(TX2017.sf)
+
+out2017.sf <- aw_interpolate(Dallas.sfdf, 
+               tid = "ID", 
+               source = TX2017.sf, 
+               sid = "ID2",
+               extensive = c("B01001_001E", "B25024_001E", "B25024_010E"),
+               weight = "total", 
+               output = "sf")
+```
+
+The Dallas, TX tornado impacted an estimated 97,250 people. It also impacted an estimate 41,482 housing units and 145 mobile homes.
+
+### Casualty model
+
+Find the actual path area and popD
+```{r}
+Dallas.sfdf$PathArea <- st_area(Dallas.sfdf)
+Dallas.sfdf$popD <- (out2017.sf$B01001_001E/Dallas.sfdf$PathArea) * 10^6
+Dallas.sfdf$mag <- 2
+Dallas.sfdf$smh = 2.4266140
+Beauregard.sfdf$syr = 2.31
+
+perc <- c(1, 0, 0, 0, 0, 0, 
+         .772, .228, 0, 0, 0, 0,
+         .616, .268, .115, 0, 0, 0,
+         .529, .271, .133, .067, 0, 0,
+         .543, .238, .131, .056, .032, 0,
+         .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- Beauregard.sfdf$mag + 1
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+Beauregard.sfdf <- Beauregard.sfdf %>%
+ mutate(ED = EW3 * PathArea)
+```
+The path area of the Beauregard-Smiths Station, AL tornado was 40774487.
+
+```{r}
+# Create Dallas tornado data frame
+
+df <- data.frame(pop = )
+
+
+library(lme4)
+
+formula4 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + smi + (1|mo) + (1|hr)
+m4 <- lmer(formula4, data = df)
+
+summary(m4)
+cor(df$cas, exp(predict(m4)))
+```
