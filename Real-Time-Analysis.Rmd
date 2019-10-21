@@ -169,7 +169,7 @@ library(brms)
 set.seed(4550)
 
 formula5 <- cas | trunc(lb = 1) ~ syr + lpopD + lED + lpopD:lED + smh + (1|Hour) + (1|mo)
-get_prior(formula5, data = df, family = negbinomial)
+get_prior(formula5, data = df, family = lognormal)
 # Sample from the priors
 prior5 <- brm(formula = formula5,
               data = df, family = lognormal,
@@ -182,11 +182,11 @@ prior5 <- brm(formula = formula5,
 out <- predict(prior5, probs = c(0, 1))
 # Fit the model
 post5 <- brm(formula = formula5,
-             data = df, family = negbinomial,
+             data = df, family = lognormal,
              prior = c(set_prior("normal(0,5)", class = "b"),
                        set_prior("student_t(3, 1, 10)", class = "Intercept"),
                        set_prior("student_t(3, 0, 10)", class = "sd"),
-                       set_prior("gamma(0.01, 0.01)", class = "shape")),
+                       set_prior("student_t(3, 0, 10)", class = "sigma")),
               inits = "0", seed = 4520,
               control = list(adapt_delta = .8))
 summary(post5)
