@@ -109,6 +109,7 @@ df <- (TornSC.sf) %>%
  mutate(lpopD = log(popD),
         lED = log(ED),
         lcas = log(cas),
+        lmh = log(MoblHms),
         smi = scale(MdnIncm),
         smh = scale(MoblHms),
         syr = scale(yr),
@@ -148,16 +149,17 @@ df <- df[df$TotalPp > 0,]
 df2 <- Dallas.sfdf %>%
   mutate(lpopD = log(popD),
          lED = log(ED),
+         lmh = log(out2017.sf$B25024_010E),
          mo = 10,
          Hour = 9)
 
 library(lme4)
 
-formula4 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + (1|mo) + (1|Hour)
-m4 <- lmer(formula4, data = df)
+formula1 <- lcas ~ syr + lpopD + lED + lpopD:lED + lmh + (1|mo) + (1|Hour)
+m1 <- lmer(formula1, data = df)
 
-summary(m4)
-cor(df$cas, exp(predict(m4)))
+summary(m1)
+cor(df$cas, exp(predict(m1)))
 ```
 
 Import code from UDT paper for casualty model (brms).
