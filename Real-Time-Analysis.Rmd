@@ -143,10 +143,7 @@ Dallas.sfdf <- Dallas.sfdf %>%
 
 This is the model.
 ```{r}
-df = df %>%
-  dplyr::select(cas, lcas, syr, lpopD, lED, smh, mo, Hour)
-
-df <- df[!is.infinite(rowSums(df)),]
+df <- df[df$TotalPp > 0,]
 
 #add dallas data
 df2 <- Dallas.sfdf %>%
@@ -192,7 +189,7 @@ post5 <- brm(formula = formula5,
                        set_prior("student_t(3, 1, 10)", class = "Intercept"),
                        set_prior("student_t(3, 0, 10)", class = "sd"),
                        set_prior("student_t(3, 0, 10)", class = "sigma")),
-              inits = "0", seed = 4520,
+              inits = "0", seed = 4550,
               control = list(adapt_delta = .8))
 summary(post5)
 ```
