@@ -144,6 +144,7 @@ Dallas.sfdf <- Dallas.sfdf %>%
 This is the model.
 ```{r}
 df <- df[df$TotalPp > 0,]
+#df <- df[df$yr < 2018,]
 
 #add dallas data
 df2 <- Dallas.sfdf %>%
@@ -172,6 +173,7 @@ set.seed(4550)
 
 formula5 <- cas | trunc(lb = 1) ~ syr + lpopD + lED + lpopD:lED + smh + (1|Hour) + (1|mo)
 get_prior(formula5, data = df, family = lognormal)
+
 # Sample from the priors
 prior5 <- brm(formula = formula5,
               data = df, family = lognormal,
@@ -182,6 +184,7 @@ prior5 <- brm(formula = formula5,
           sample_prior = "only", seed = 4550,
           control = list(adapt_delta = .8))
 out <- predict(prior5, probs = c(0, 1))
+
 # Fit the model
 post5 <- brm(formula = formula5,
              data = df, family = lognormal,
