@@ -156,7 +156,7 @@ df2 <- Dallas.sfdf %>%
 
 library(lme4)
 
-formula1 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + (1|mo) + (1|Hour)
+formula1 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + syr:smh + (1|mo) + (1|Hour)
 m1 <- lmer(formula1, data = df)
 
 summary(m1)
@@ -171,7 +171,7 @@ library(brms)
 
 set.seed(4550)
 
-formula5 <- cas | trunc(lb = 1) ~ syr + lpopD + lED + lpopD:lED + smh + (1|Hour) + (1|mo)
+formula5 <- cas | trunc(lb = 1) ~ lpopD + lED + lpopD:lED + syr + smh + (1|Hour) + (1|mo)
 get_prior(formula5, data = df, family = lognormal)
 
 # Sample from the priors
