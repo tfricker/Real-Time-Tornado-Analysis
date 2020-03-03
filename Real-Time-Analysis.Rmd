@@ -281,5 +281,153 @@ tm_shape(TX2017.sf) +
             panel.label.bg.color = "white", frame = FALSE)
 ```
 
+## Nashville Tornado
+```{r}
+Nashville = readOGR("Nashville.kml") 
+
+Nashville.sfdf = sf::st_as_sf(Nashville) 
+Nashville.sfdf = Nashville.sfdf %>%
+  mutate(Name = "Nashville, TN") %>%
+  Nashville.sfdf[-c(2)]
+
+tmap_mode("view")
+tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_tiles("CartoDB.PositronOnlyLabels") +
+tm_shape(Nashville.sfdf) +
+  tm_polygons(col = "grey", alpha = 0.01, border.col = "red") +
+#  tm_shape(AL2010.sf) + 
+#  tm_borders(col = "grey80", alpha = 0.3) +
+  tm_scale_bar() +
+  tm_format_Europe(legend.position = c("left", "bottom"),
+                   attr.position = c("left", "bottom"),
+                   legend.frame = FALSE) +
+  tm_layout(panel.label.bg.color = "white", frame = FALSE)
+```
+
+Get Texas 2019 tract data. Only grab total population, total housing units, and mobile home units. Then overlay and extract information about the Dayton, OH tornado.
+```{r}
+TN2018.sf <- get_acs(state = "TN",
+          geography = "tract", 
+          variables = c("B01001_001", "B25024_001", "B25024_010"),
+          year = 2018,
+          output = "wide",
+          geometry = TRUE)
+
+TN2018.sf <- st_transform(TN2018.sf, 
+                     crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
+
+Nashville.sfdf <- st_transform(Nashville.sfdf, crs = st_crs(TN2018.sf))
+Nashville.sfdf$ID <-  1:nrow(Nashville.sfdf)
+TN2018.sf$ID2 <- 1:nrow(TN2018.sf)
+
+out2018.sf <- aw_interpolate(Nashville.sfdf, 
+               tid = "ID", 
+               source = TN2018.sf, 
+               sid = "ID2",
+               extensive = c("B01001_001E", "B25024_001E", "B25024_010E"),
+               weight = "total", 
+               output = "sf")
+```
+
+The Nashville, TN tornado impacted an estimated 97,227 people. It also impacted an estimate 43,678 housing units and 1275 mobile homes.
+
+Find the actual path area and popD
+```{r}
+Nashville.sfdf$PathArea <- st_area(Nashville.sfdf)
+Nashville.sfdf$popD <- (out2018.sf$B01001_001E/Nashville.sfdf$PathArea) * 10^6
+Nashville.sfdf$mag <- 3
+Nashville.sfdf$smh = 11.7
+Nashville.sfdf$syr = 2.20
+
+perc <- c(1, 0, 0, 0, 0, 0, 
+         .772, .228, 0, 0, 0, 0,
+         .616, .268, .115, 0, 0, 0,
+         .529, .271, .133, .067, 0, 0,
+         .543, .238, .131, .056, .032, 0,
+         .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- Nashville.sfdf$mag + 1
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+Nashville.sfdf <- Nashville.sfdf %>%
+ mutate(ED = EW3 * PathArea)
+```
+
+This is the model.
+```{r}
+#add nashville data
+df2 <- Nashville.sfdf %>%
+  mutate(lpopD = log(popD),
+         lED = log(ED),
+         lmh = log(out2018.sf$B25024_010E),
+         mo = 3,
+         Hour = 1)
+```
 
 
+Import code from UDT paper for casualty model (brms).
+
+Work with the **brms** package for mixed effects model. First sample from the priors. Set `inits` to `"0"` rather than the default `"random"`.
+```{r}
+library(brms)
+
+set.seed(4550)
+
+formula5 <- cas | trunc(lb = 1) ~ lpopD + lED + lpopD:lED + syr + smh + (1|Hour) + (1|mo)
+get_prior(formula5, data = df, family = lognormal)
+
+# Sample from the priors
+prior5 <- brm(formula = formula5,
+              data = df, family = lognormal,
+              prior = c(set_prior("normal(0,5)", class = "b"),
+                    set_prior("student_t(3, 1, 10)", class = "Intercept"),
+                    set_prior("student_t(3, 0, 10)", class = "sd"),
+                    set_prior("student_t(3, 0, 10)", class = "sigma")),
+          sample_prior = "only", seed = 4550,
+          control = list(adapt_delta = .8))
+out <- predict(prior5, probs = c(0, 1))
+
+# Fit the model
+post5 <- brm(formula = formula5,
+             data = df, family = lognormal,
+             prior = c(set_prior("normal(0,5)", class = "b"),
+                       set_prior("student_t(3, 1, 10)", class = "Intercept"),
+                       set_prior("student_t(3, 0, 10)", class = "sd"),
+                       set_prior("student_t(3, 0, 10)", class = "sigma")),
+              inits = "0", seed = 4550,
+              control = list(adapt_delta = .8))
+summary(post5)
+```
+
+Correlation between estimated and actual casualties.
+```{r}
+cor(predict(post5)[, 1], df$cas)
+```
+
+Predict
+```{r}
+predict(post5, newdata = df2)
+```
+
+Map the #NashvilleTornado
+```{r}
+pal = brewer.pal(7, "Blues")
+
+tmap_mode("view")
+
+tm_shape(TN2018.sf) + 
+  tm_polygons("B01001_001E", title = "Total Population", breaks = c(0, 1000, 3000, 5000, 10000, 20000, 30000), labels = c("0 to 1,000", "1,000 to 3,000", "3,000 to 5,000", "5,000 to 10,000", "10,000 to 20,000", "> 20,000"), palette = pal) +
+  tm_shape(TN2018.sf) +
+  tm_borders(col = "grey80", alpha = 0.3) +
+  tm_shape(Nashville.sfdf) +
+  tm_polygons(col = "grey", alpha = 0.01, border.col = "red") +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_tiles("CartoDB.PositronOnlyLabels") +
+  tm_scale_bar() +
+  tm_layout(legend.position = c("left", "bottom"),
+            attr.position = c("left", "bottom"),
+            legend.frame = FALSE,
+            panel.label.bg.color = "white", frame = FALSE)
+```
