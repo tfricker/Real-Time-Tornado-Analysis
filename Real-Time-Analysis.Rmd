@@ -355,7 +355,46 @@ out2018.sf <- aw_interpolate(Nashville.sf,
                output = "sf")
 ```
 
-The Nashville, TN tornado impacted an estimated 97,227 people. It also impacted an estimate 43,678 housing units and 1275 mobile homes.
+The Nashville, TN tornado impacted an estimated 24,439 people. It also impacted an estimate 11,163 housing units and 356 mobile homes.
+
+## Cookeville
+```{r}
+Cookeville.sf <- st_read(dsn = "Cookeville", 
+                    layer = "extractDamagePaths", 
+                    stringsAsFactors = FALSE)
+
+Cookeville.sf = as(Cookeville.sf, "Spatial")
+Cookeville.sf = spTransform(Cookeville.sf, CRS("+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0 "))
+
+C = gBuffer(Cookeville.sf, byid = TRUE, width = (Cookeville.sf$width * .9144)/2)
+
+Cookeville.sf = sf::st_as_sf(C)
+
+tmap_mode("view")
+tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_tiles("CartoDB.PositronOnlyLabels") +
+tm_shape(Cookeville.sf) +
+  tm_polygons(col = "grey", alpha = 0.01, border.col = "red") +
+#  tm_shape(AL2010.sf) + 
+#  tm_borders(col = "grey80", alpha = 0.3) +
+  tm_scale_bar() +
+  tm_format_Europe(legend.position = c("left", "bottom"),
+                   attr.position = c("left", "bottom"),
+                   legend.frame = FALSE) +
+  tm_layout(panel.label.bg.color = "white", frame = FALSE)
+
+Cookeville.sf <- st_transform(Cookeville.sf, crs = st_crs(TN2018.sf))
+Cookeville.sf$ID <-  1:nrow(Cookeville.sf)
+TN2018.sf$ID2 <- 1:nrow(TN2018.sf)
+
+Cout2018.sf <- aw_interpolate(Cookeville.sf, 
+               tid = "ID", 
+               source = TN2018.sf, 
+               sid = "ID2",
+               extensive = c("B01001_001E", "B25024_001E", "B25024_010E"),
+               weight = "total", 
+               output = "sf")
+```
 
 Find the actual path area and popD
 ```{r}
