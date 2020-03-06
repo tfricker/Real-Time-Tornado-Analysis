@@ -396,6 +396,50 @@ Cout2018.sf <- aw_interpolate(Cookeville.sf,
                output = "sf")
 ```
 
+Rerun for 2010
+```{r}
+TN2010.sf <- get_acs(state = "TN",
+          geography = "tract", 
+          variables = c("B01001_001", "B25024_001", "B25024_010"),
+          year = 2015,
+          output = "wide",
+          geometry = TRUE)
+
+TN2010.sf <- st_transform(TN2010.sf, 
+                     crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
+TN2010.sf$ID2 <- 1:nrow(TN2010.sf)
+
+Cout2010.sf <- aw_interpolate(Cookeville.sf, 
+               tid = "ID", 
+               source = TN2010.sf, 
+               sid = "ID2",
+               extensive = c("B01001_001E", "B25024_001E", "B25024_010E"),
+               weight = "total", 
+               output = "sf")
+```
+
+```{r}
+Cookeville.sf$PathArea <- st_area(Cookeville.sf)
+Cookeville.sf$popD <- (Cout2018.sf$B01001_001E/Cookeville.sf$PathArea) * 10^6
+Cookeville.sf$mag <- 3
+
+perc <- c(1, 0, 0, 0, 0, 0, 
+         .772, .228, 0, 0, 0, 0,
+         .616, .268, .115, 0, 0, 0,
+         .529, .271, .133, .067, 0, 0,
+         .543, .238, .131, .056, .032, 0,
+         .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- Cookeville.sf$mag + 1
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+Cookeville.sf <- Cookeville.sf %>%
+ mutate(ED = EW3 * PathArea)
+```
+
+
 Find the actual path area and popD
 ```{r}
 Nashville.sfdf$PathArea <- st_area(Nashville.sfdf)
