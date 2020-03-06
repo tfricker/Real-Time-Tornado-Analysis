@@ -304,7 +304,33 @@ tm_shape(Nashville.sfdf) +
   tm_layout(panel.label.bg.color = "white", frame = FALSE)
 ```
 
-Get Texas 2019 tract data. Only grab total population, total housing units, and mobile home units. Then overlay and extract information about the Dayton, OH tornado.
+```{r}
+Nashville.sf <- st_read(dsn = "Nashville", 
+                    layer = "extractDamagePaths", 
+                    stringsAsFactors = FALSE)
+
+Nashville.sf = as(Nashville.sf, "Spatial")
+Nashville.sf = spTransform(Nashville.sf, CRS("+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0 "))
+
+N = gBuffer(Nashville.sf, byid = TRUE, width = (Nashville.sf$width * .9144)/2)
+
+Nashville.sf = sf::st_as_sf(N)
+
+tmap_mode("view")
+tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_tiles("CartoDB.PositronOnlyLabels") +
+tm_shape(Nashville.sf) +
+  tm_polygons(col = "grey", alpha = 0.01, border.col = "red") +
+#  tm_shape(AL2010.sf) + 
+#  tm_borders(col = "grey80", alpha = 0.3) +
+  tm_scale_bar() +
+  tm_format_Europe(legend.position = c("left", "bottom"),
+                   attr.position = c("left", "bottom"),
+                   legend.frame = FALSE) +
+  tm_layout(panel.label.bg.color = "white", frame = FALSE)
+```
+
+Get Tennessee 2018 tract data. Only grab total population, total housing units, and mobile home units. Then overlay and extract information about the Nashville, TN tornado.
 ```{r}
 TN2018.sf <- get_acs(state = "TN",
           geography = "tract", 
@@ -316,11 +342,11 @@ TN2018.sf <- get_acs(state = "TN",
 TN2018.sf <- st_transform(TN2018.sf, 
                      crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
 
-Nashville.sfdf <- st_transform(Nashville.sfdf, crs = st_crs(TN2018.sf))
-Nashville.sfdf$ID <-  1:nrow(Nashville.sfdf)
+Nashville.sf <- st_transform(Nashville.sf, crs = st_crs(TN2018.sf))
+Nashville.sf$ID <-  1:nrow(Nashville.sf)
 TN2018.sf$ID2 <- 1:nrow(TN2018.sf)
 
-out2018.sf <- aw_interpolate(Nashville.sfdf, 
+out2018.sf <- aw_interpolate(Nashville.sf, 
                tid = "ID", 
                source = TN2018.sf, 
                sid = "ID2",
