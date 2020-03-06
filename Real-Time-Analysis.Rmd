@@ -421,7 +421,7 @@ Cout2010.sf <- aw_interpolate(Cookeville.sf,
 ```{r}
 Cookeville.sf$PathArea <- st_area(Cookeville.sf)
 Cookeville.sf$popD <- (Cout2018.sf$B01001_001E/Cookeville.sf$PathArea) * 10^6
-Cookeville.sf$mag <- 3
+Cookeville.sf$mag <- 4
 
 perc <- c(1, 0, 0, 0, 0, 0, 
          .772, .228, 0, 0, 0, 0,
