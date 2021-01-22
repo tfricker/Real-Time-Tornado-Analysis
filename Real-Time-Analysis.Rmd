@@ -34,6 +34,141 @@ suppressPackageStartupMessages(library("areal"))
 suppressPackageStartupMessages(library("ipumsr"))
 ```
 
+### Monroe, Louisiana Tornado (Easter 2020)
+```{r}
+Monroe = readOGR("Monroe.kml") 
+
+Monroe.sfdf = sf::st_as_sf(Monroe) %>%
+  Monroe.sfdf[-c(2)]
+
+Monroe.sfdf$Area = st_area(Monroe.sfdf)
+Monroe.sfdf <- Monroe.sfdf %>%
+  group_by(Name) %>%
+  dplyr::summarize(Area = sum(Area))
+
+EF0 <- Monroe.sfdf %>%
+  filter(Name == "EF0")
+
+pal = c("cyan", "green", "yellow", "orange")
+
+tmap_mode("view")
+tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_tiles("CartoDB.PositronOnlyLabels") +
+tm_shape(Monroe.sfdf) +
+  tm_polygons(col = "Name", palette = pal) +
+#tm_shape(EF0) +
+#  tm_polygons(alpha = 0, border.col = "cyan") +
+  tm_scale_bar() +
+  tm_layout(panel.label.bg.color = "white", frame = FALSE)
+```
+
+Get Louisiana 2019 tract data. Only grab total population, total housing units, and mobile home units. Then overlay and extract information about the Monroe, LA tornado.
+```{r}
+LA2019.sf <- get_acs(state = "LA",
+          geography = "tract", 
+          variables = c("B01001_001", "B25024_001", "B25024_010"),
+          year = 2019,
+          output = "wide",
+          geometry = TRUE)
+
+LA2019.sf <- st_transform(LA2019.sf, 
+                     crs = "+proj=lcc +lat_1=60 +lat_2=30 +lon_0=-90 +units=m")
+
+Monroe.sfdf <- st_transform(Monroe.sfdf, crs = st_crs(LA2019.sf))
+Monroe.sfdf$ID <-  1:nrow(Monroe.sfdf)
+LA2019.sf$ID2 <- 1:nrow(LA2019.sf)
+
+out2019 <- aw_interpolate(Monroe.sfdf, 
+               tid = "ID", 
+               source = LA2019.sf, 
+               sid = "ID2",
+               extensive = c("B01001_001E", "B25024_001E", "B25024_010E"),
+               weight = "total", 
+               output = "sf")
+
+out2019 <- out2019[1,]
+```
+
+The Monroe, LA tornado impacted an estimated 1,467 people. It also impacted an estimated 626 housing units and 83 mobile homes.
+
+### Casualty model
+
+To fit the model, first read in indiviudal tornado level estimates. Then edit the information to account for population density, etc.
+```{r}
+#unzip("SocialCorrelates.zip")
+TornSC.sf <- st_read(dsn = "SocialCorrelates", 
+                    layer = "SocialCorrelates", 
+                    stringsAsFactors = FALSE) %>%
+  mutate(date = as.Date(date),
+         DateTim = as.POSIXct(paste(yr, mo, dy, time), format = "%Y%m%d%H:%M:%S"))
+
+TornSC.sf$popD = TornSC.sf$TotalPp/TornSC.sf$AreaPth * 10^6
+TornSC.sf$PopUnder18 = TornSC.sf$MlUnd18 + TornSC.sf$FmlUn18
+TornSC.sf$Pop18to44 = TornSC.sf$Ml18t44 + TornSC.sf$Fml1844
+TornSC.sf$Pop45to64 = TornSC.sf$Ml45t64 + TornSC.sf$Fml4564
+TornSC.sf$PopOver65 = TornSC.sf$MlOvr65 + TornSC.sf$FmlOv65
+```
+
+Create a new data frame with columns containing logged and scaled variables.
+```{r}
+df <- data.frame(TornSC.sf) %>%
+ mutate(lpopD = log(popD),
+        lED = log(ED),
+        lcas = log(cas),
+        lmh = log(MoblHms),
+        smi = scale(MdnIncm),
+        smh = scale(MoblHms),
+        syr = scale(yr),
+        pW = White/TotalPp,
+        pB = Black/TotalPp)
+```
+
+Find the actual path area and popD
+```{r}
+Monroe.sfdf$PathArea <- Monroe.sfdf$Area
+Monroe.sfdf$popD <- (out2019$B01001_001E/Monroe.sfdf$PathArea) * 10^6
+Monroe.sfdf$mag <- 3
+Monroe.sfdf$smh = 1.262449
+Monroe.sfdf$syr = 1.902016
+
+perc <- c(1, 0, 0, 0, 0, 0, 
+         .772, .228, 0, 0, 0, 0,
+         .616, .268, .115, 0, 0, 0,
+         .529, .271, .133, .067, 0, 0,
+         .543, .238, .131, .056, .032, 0,
+         .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- Monroe.sfdf$mag + 1
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+Monroe.sfdf <- Monroe.sfdf %>%
+ mutate(ED = EW3 * PathArea)
+```
+
+This is the model.
+```{r}
+df <- df[df$TotalPp > 0,]
+#df <- df[df$yr < 2018,]
+
+#add dallas data
+df2 <- Monroe.sfdf[1,] %>%
+  mutate(lpopD = log(popD),
+         lED = log(ED),
+         lmh = log(out2019$B25024_010E),
+         mo = 4,
+         Hour = 11)
+
+library(lme4)
+
+formula1 <- lcas ~ syr + lpopD + lED + lpopD:lED + smh + syr:smh + (1|mo) + (1|Hour)
+m1 <- lmer(formula1, data = df)
+
+summary(m1)
+cor(df$cas, exp(predict(m1)))
+```
+
 ### Dallas, Texas Tornado (10-20-2019)
 
 ```{r}
