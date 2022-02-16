@@ -38,7 +38,9 @@ suppressPackageStartupMessages(library("ipumsr"))
 ```{r}
 Monroe = readOGR("Monroe.kml") 
 
-Monroe.sfdf = sf::st_as_sf(Monroe) %>%
+Monroe.sfdf = sf::st_as_sf(Monroe)
+
+Monroe.sfdf = Monroe.sfdf %>%
   Monroe.sfdf[-c(2)]
 
 Monroe.sfdf$Area = st_area(Monroe.sfdf)
