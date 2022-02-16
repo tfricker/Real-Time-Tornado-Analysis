@@ -123,6 +123,8 @@ df <- data.frame(TornSC.sf) %>%
         syr = scale(yr),
         pW = White/TotalPp,
         pB = Black/TotalPp)
+
+df <- df[df$TotalPp > 0,]
 ```
 
 Find the actual path area and popD
@@ -149,12 +151,40 @@ Monroe.sfdf <- Monroe.sfdf %>%
  mutate(ED = EW3 * PathArea)
 ```
 
+```{r}
+#Monroe, LA Tornado Power
+
+#ULM
+perc <- c(.470, .511, .013, .006) 
+threshW <- c(29.06, 38.45, 49.62, 60.8)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- c(0, 1, 2, 3)
+EW3 = midptW^3 %*% perc
+Monroe.sfdf <- Monroe.sfdf %>%
+ mutate(ED = EW3 * PathArea)
+Monroe.sfdf$ED = sum(Monroe.sfdf$ED)
+Monroe.sfdf$PathArea <- Monroe.sfdf$Area
+Monroe.sfdf$popD <- (out2019$B01001_001E/Monroe.sfdf$PathArea) * 10^6
+Monroe.sfdf$mag <- 3
+Monroe.sfdf$smh = 1.262449
+Monroe.sfdf$syr = 1.902016
+
+#NWS
+perc <- c(.536, .422, .025, .017) 
+threshW <- c(29.06, 38.45, 49.62, 60.8)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- c(0, 1, 2, 3)
+EW3 = midptW^3 %*% perc
+NWSMonroe <- NWSMonroe %>%
+ mutate(ED = EW3 * Area)
+NWSMonroe$ED = sum(NWSMonroe$ED)
+```
+
 This is the model.
 ```{r}
-df <- df[df$TotalPp > 0,]
+#df <- df[df$TotalPp > 0,]
 #df <- df[df$yr < 2018,]
 
-#add dallas data
 df2 <- Monroe.sfdf[1,] %>%
   mutate(lpopD = log(popD),
          lED = log(ED),
